@@ -57,7 +57,7 @@ There are 2 exceptions to this:
 
 - Placeholders that are in base64 format - see [Base64 placeholders](#base64-placeholders) for details
 
-- Modifiers - see [Modifiers](#Modifiers) for details
+- Modifiers - see [Modifiers](#modifiers) for details
 
 ### Types of placeholders
 
@@ -163,7 +163,7 @@ apiVersion: v1
 metadata:
   name: some-crd
 
-  # Notice, no `avp.kuberenetes.io/path` annotation here
+  # Notice, no `avp.kubernetes.io/path` annotation here
   annotations: {}
 type: Opaque
 fieldRef:
@@ -189,9 +189,9 @@ apiVersion: v1
 metadata:
   name: some-crd
 
-  # Notice, `avp.kuberenetes.io/ignore` annotation is set
+  # Notice, `avp.kubernetes.io/ignore` annotation is set
   annotations:
-    avp.kuberenetes.io/ignore: "true"
+    avp.kubernetes.io/ignore: "true"
 type: Opaque
 fieldRef:
 
@@ -222,7 +222,7 @@ apiVersion: v1
 metadata:
   name: example-secret
   annotations:
-    avp.kubernetes.io/remove-missing: true
+    avp.kubernetes.io/remove-missing: "true"
 stringData:
   username: <username>
   password: <pass>
@@ -240,7 +240,7 @@ apiVersion: v1
 metadata:
   name: example-secret
   annotations:
-    avp.kubernetes.io/remove-missing: true
+    avp.kubernetes.io/remove-missing: "true"
 stringData:
   username: user
 ```
@@ -314,3 +314,46 @@ Valid examples:
 - `<path:secrets/data/db_yaml#yaml | yamlParse | jsonPath {.username}{':'}{.password}>`
 
 - `<path:secrets/data/db_yaml#yaml#version2 | yamlParse | jsonPath {.username} | base64encode>`
+
+##### `indent`
+
+The indent modifier indents the secret data by the specified number of space characters (`0x20`), largely useful when injecting secrets into YAML strings embedded in YAML.
+
+Valid examples:
+
+- `<path:secrets/data/db#certs | jsonPath {.certificate} | indent 3>`
+
+##### `sha256sum`
+
+The sha256sum modifier computes the SHA256 checksum of the string. Can be used to detect changes in a secret.
+
+Valid examples:
+
+```yaml
+kind: Deployment
+spec:
+  template:
+    metadata:
+      annotations:
+        checksum/secret: <path:secrets/data/db#certs | sha256sum>
+```
+
+### Error Handling
+
+#### Detecting errors in chained commands
+
+By default argocd-vault-plugin will read valid kubernetes YAMLs and replace variables with values from Vault.
+If a previous command failed and outputs nothing to stdout and AVP reads the input from stdin with
+the `-` argument, AVP will forward an empty YAML output downstream. To catch and prevent accientental errors
+in chained commands, please use the `-o pipefail` bash option like so:
+
+```bash
+$ sh -c '((>&2 echo "some error" && exit 1) | argocd-vault-plugin generate - | kubectl diff -f -); echo $?;'
+some error
+0
+
+$ set -o pipefail
+$ sh -c '((>&2 echo "some error" && exit 1) | argocd-vault-plugin generate - | kubectl diff -f -); echo $?;'
+some error
+1
+```

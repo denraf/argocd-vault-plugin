@@ -1,6 +1,10 @@
 ### HashiCorp Vault
 We support AppRole and Github Auth Method for getting secrets from Vault.
 
+We currently support retrieving secrets from KV-V1 and KV-V2 backends.
+
+**Note**: For KV-V2 backends, the path needs to be specified as `${vault-kvv2-backend-path}/data/{path-to-secret}` where `vault-kvv2-backend-path` is the path to the KV-V2 backend (usually just `secret`) and `path-to-secret` is the path to the secret in Vault.
+
 ##### AppRole Authentication
 For AppRole Authentication, these are the required parameters:
 ```
@@ -69,7 +73,7 @@ In order to use Kubernetes Authentication a couple of things are required.
           automountServiceAccountToken: true
     ```
 
-2. Configuring Kubernetes  
+2. Configuring Kubernetes
     Use the /config endpoint to configure Vault to talk to Kubernetes. Use `kubectl cluster-info` to validate the Kubernetes host address and TCP port. For the list of available configuration options, please see the [API documentation](https://www.vaultproject.io/api/auth/kubernetes).
 
     ```
@@ -155,7 +159,7 @@ data:
 **Note**: Only Vault KV-V2 backends support versioning. Versions specified with a KV-V1 Vault will be ignored and the latest version will be retrieved.
 
 ### IBM Cloud Secrets Manager
-For IBM Cloud Secret Manager we only support using IAM authentication at this time. 
+For IBM Cloud Secret Manager we only support using IAM authentication at this time.
 
 We support all types of secrets that can be retrieved from IBM Cloud Secret Manager. Please note:
 
@@ -277,6 +281,39 @@ stringData:
 type: Opaque
 ```
 
+###### Secret in the same account
+
+The 'friendly' name of the secret can be used in this case.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-example
+stringData:
+  sample-secret: <path:test-aws-secret#test-secret>
+type: Opaque
+```
+
+###### Secret in a different account
+
+The arn of the secret needs to be used in this case:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-example
+stringData:
+  sample-secret: <path:arn:aws:secretsmanager:<REGION>:<ACCOUNT_NUMBER>:<SECRET_ID>#<key>>
+type: Opaque
+```
+
+**NOTE**
+For cross account access there is the need to configure the correct permissions between accounts, please check:
+https://aws.amazon.com/premiumsupport/knowledge-center/secrets-manager-share-between-accounts  
+https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_examples_cross.html  
+
 ### GCP Secret Manager
 
 ##### GCP Authentication
@@ -391,4 +428,164 @@ data:
   current-password: <path:keyvault#password>
   current-password-again: <path:keyvault#password#8f8da2e06c8240808ee439ff093803b5>
   password-old: <path:keyvault#password#33740fc26214497f8904d93f20f7db6d>
+```
+
+### SOPS
+##### SOPS Authentication
+Refer to the [SOPS project page](https://github.com/mozilla/sops) for authentication options/environment variables.
+
+For SOPS, `path` is file path to a JSON or YAML file encrypted using SOPS  and `key` is a top level key in the document, `jsonpath` can be used to fetch subkeys.
+
+**Note**: Versioning is not supported.
+
+These are the parameters for SOPS:
+```
+AVP_TYPE: sops
+```
+
+##### Examples
+Given a file encrypted with SOPS named `example.yaml` and containing the following data:
+```yaml
+test-secret: test-data
+parent:
+  child: value
+```
+
+###### Path Annotation
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+  annotations:
+    avp.kubernetes.io/path: "example.yaml"
+type: Opaque
+data:
+  password: <test-secret>
+```
+
+###### Inline Path
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+type: Opaque
+data:
+  password: <path:example.yaml#test-secret>
+```
+
+###### Sub key
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+  annotations:
+    avp.kubernetes.io/path: "example.yaml"
+type: Opaque
+stringData:
+  password: <parent | jsonPath {.child}>
+```
+
+### Yandex Cloud Lockbox
+##### YCL Authentication
+Refer to the [IAM overview](https://cloud.yandex.com/en/docs/iam/concepts/) for yandex cloud APIs authorization.
+
+These are the parameters for YCL:
+```
+AVP_TYPE: yandexcloudlockbox
+AVP_YCL_SERVICE_ACCOUNT_ID: Service account ID
+AVP_YCL_KEY_ID: Service account authorized Key ID
+AVP_YCL_PRIVATE_KEY: Service account authorized private key
+```
+##### Examples
+
+###### Path Annotation
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+  annotations:
+    avp.kubernetes.io/path: "secret-id"
+type: Opaque
+data:
+  password: <key>
+```
+
+###### Inline Path
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+type: Opaque
+data:
+  password: <path:secret-id#key>
+```
+
+###### Versioned secrets
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+    avp.kubernetes.io/path: "secret-id"
+    avp.kubernetes.io/secret-version: "version-id"
+type: Opaque
+data:
+  current-password: <password>
+  current-password-again: <path:secret-id#password#version-id>
+  password-old: <path:secret-id#password#old-version-id>
+```
+
+### 1Password Connect
+
+**Note**: The 1Password Connect backend does not support versioning, so specifying a version will be ignored.
+
+##### 1Password Connect Authentication
+
+Refer to the [1Password Secrets Automation overview](https://support.1password.com/secrets-automation/) for 1Password Connect usage.
+
+These are the parameters for 1Password Connect:
+
+```
+AVP_TYPE: 1passwordconnect
+OP_CONNECT_TOKEN: Your 1Password Connect access token
+OP_CONNECT_HOST: The hostname of your 1Password Connect server
+```
+
+##### Examples
+
+###### Path Annotation
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+  annotations:
+    avp.kubernetes.io/path: "vaults/vault-uuid/items/item-uuid"
+type: Opaque
+data:
+  password: <key>
+```
+
+###### Inline Path
+
+```yaml
+kind: Secret
+apiVersion: v1
+metadata:
+  name: test-secret
+type: Opaque
+data:
+  password: <path:vaults/vault-uuid/items/item-uuid#key>
 ```

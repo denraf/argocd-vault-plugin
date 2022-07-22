@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/IBM/argocd-vault-plugin/pkg/helpers"
-	"github.com/IBM/argocd-vault-plugin/pkg/types"
+	"github.com/argoproj-labs/argocd-vault-plugin/pkg/helpers"
+	"github.com/argoproj-labs/argocd-vault-plugin/pkg/types"
 )
 
 func assertSuccessfulReplacement(actual, expected *Resource, t *testing.T) {
@@ -626,6 +626,35 @@ func TestStringify(t *testing.T) {
 		out := stringify(tc.input)
 		if out != tc.expected {
 			t.Errorf("expected: %s, got: %s.", tc.expected, out)
+		}
+	}
+}
+
+func TestSecretNamespaceName(t *testing.T) {
+	testCases := []struct {
+		input             string
+		expectedNamespace string
+		expectedName      string
+	}{
+		{
+			"secretwithoutnamespace",
+			"argocd",
+			"secretwithoutnamespace",
+		},
+		{
+			"secretnamespace:secretname",
+			"secretnamespace",
+			"secretname",
+		},
+	}
+
+	for _, tc := range testCases {
+		namespace, name := secretNamespaceName(tc.input)
+		if namespace != tc.expectedNamespace {
+			t.Errorf("expected namespace: %s, got: %s.", tc.expectedNamespace, namespace)
+		}
+		if name != tc.expectedName {
+			t.Errorf("expected name: %s, got: %s.", tc.expectedName, name)
 		}
 	}
 }
